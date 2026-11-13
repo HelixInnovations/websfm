@@ -5,6 +5,17 @@ Notable changes to websfm. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Triangulated toe base and tonnage for stockpile volumes.** In **Volume**, the new
+  **Triangulated toe** base runs a surface through the DEM heights all along the polygon's
+  edge, and a **Material** picker turns the cut into tonnes. The toe follows uneven ground
+  that one plane cannot: on a synthetic pile over a kinked ramp the plane reported fill
+  that was not there, the toe the exact volume; on evenly sloping ground both agree to the
+  cubic metre. The material list and loose bulk densities are the Stockpile app's; a
+  custom density can be typed in t/m³ or kg/m³. Saved volumes keep their material and
+  density, and Export ▸ Measurements writes `material`, `density_t_m3` and `tonnes`.
+
 ## [0.8.0] — 2026-11-12
 
 ### Added

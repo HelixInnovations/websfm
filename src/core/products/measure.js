@@ -1,4 +1,5 @@
 // Coordinates are already in the raster's recorded frame. No implicit scaling.
+import Delaunator from 'delaunator'
 import { sampleRaster, worldToPixel } from '../io/rasterSample.js'
 import { polygonSpans } from './polygonSpans.js'
 
@@ -121,6 +122,118 @@ export function fitBasePlane(points) {
   return { x0, y0, a: (sxz * syy - syz * sxy) / det, b: (syz * sxx - sxz * sxy) / det, c: sz / n }
 }
 
+// The toe surface samples the polygon's edge at most this many times (at least once
+// per DEM cell along it): a 2 km perimeter on 10 cm cells still triangulates in a few
+// milliseconds, so the live readout keeps up while the polygon is drawn.
+export const TOE_MAX_SAMPLES = 4096
+
+/**
+ * The triangulated toe base: the DEM heights sampled all along the polygon's edge
+ * (each vertex, then about one sample per cell between them), joined into a
+ * Delaunay TIN. Inside the polygon the base follows the ground round the pile's
+ * foot instead of one plane, so a pile on uneven or kinked ground is not read too
+ * big on the low side and too small on the high side. Edge samples on holes or off
+ * the raster are skipped; a cell outside the TIN of the samples that remain has no
+ * base (unmeasured, like a hole).
+ *
+ * Point location walks from the last triangle found (cells are visited in rows, so
+ * the next cell is almost always in the same triangle or a neighbour): O(1) per
+ * cell, not a search over all triangles.
+ *
+ * @returns {{ at(x, y) → z | null, samples: number, spacing: number } | null}
+ *   null when fewer than three edge samples have heights, or all are collinear.
+ */
+export function triangulatedToe(grid, points, { maxSamples = TOE_MAX_SAMPLES } = {}) {
+  if (points.length < 3) return null
+  const zOffset = grid.zOffset || 0
+  const cell = Math.min(Math.abs(grid.geoTransform.scaleX), Math.abs(grid.geoTransform.scaleY))
+  const ring = [...points, points[0]]
+  const perimeter = polylineLength(ring)
+  const spacing = Math.max(cell, perimeter / Math.max(1, maxSamples - points.length))
+  if (!(spacing > 0)) return null
+  // Relative to the first vertex: survey coordinates (7e6 m) would cost the
+  // orientation tests their precision.
+  const x0 = points[0].x,
+    y0 = points[0].y
+  const xs = [],
+    ys = [],
+    zs = []
+  const take = (x, y) => {
+    const px = worldToPixel(grid, x, y)
+    if (!px || !validCell(grid, Math.floor(px.col), Math.floor(px.row))) return
+    const z = sampleRaster(grid, x, y)
+    if (!Number.isFinite(z)) return
+    xs.push(x - x0)
+    ys.push(y - y0)
+    zs.push(z + zOffset)
+  }
+  for (let i = 0; i < points.length; i++) {
+    const a = ring[i],
+      b = ring[i + 1]
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / spacing))
+    // j < n: the next edge starts with b.
+    for (let j = 0; j < n; j++) take(a.x + ((b.x - a.x) * j) / n, a.y + ((b.y - a.y) * j) / n)
+  }
+  if (xs.length < 3) return null
+  const coords = new Float64Array(xs.length * 2)
+  for (let i = 0; i < xs.length; i++) {
+    coords[2 * i] = xs[i]
+    coords[2 * i + 1] = ys[i]
+  }
+  const { triangles, halfedges } = new Delaunator(coords)
+  const nTri = triangles.length / 3
+  if (!nTri) return null
+  // A point exactly on an edge counts as inside both triangles; the tolerance is
+  // relative to the polygon's size, so it means the same at any scale.
+  const eps = 1e-12 * perimeter * perimeter
+  const orient = (a, b, px, py) => (xs[b] - xs[a]) * (py - ys[a]) - (ys[b] - ys[a]) * (px - xs[a])
+  const next = (e) => (e % 3 === 2 ? e - 2 : e + 1)
+  let last = 0
+  // The triangle holding (px, py), or -1 outside the TIN.
+  function locate(px, py) {
+    let t = last
+    for (let steps = 0; steps <= nTri; steps++) {
+      let crossed = -1
+      for (let k = 0; k < 3; k++) {
+        const e = 3 * t + k
+        const a = triangles[e],
+          b = triangles[next(e)],
+          c = triangles[next(next(e))]
+        const side = orient(a, b, px, py)
+        const inner = orient(a, b, xs[c], ys[c])
+        if ((inner > 0 && side < -eps) || (inner < 0 && side > eps)) {
+          crossed = e
+          break
+        }
+      }
+      if (crossed < 0) return (last = t)
+      const adj = halfedges[crossed]
+      if (adj < 0) return -1
+      t = Math.floor(adj / 3)
+    }
+    return -1 // a walk can only cycle on degenerate input; treat as unmeasured
+  }
+  return {
+    samples: xs.length,
+    spacing,
+    at(x, y) {
+      const px = x - x0,
+        py = y - y0
+      const t = locate(px, py)
+      if (t < 0) return null
+      const a = triangles[3 * t],
+        b = triangles[3 * t + 1],
+        c = triangles[3 * t + 2]
+      const area = orient(a, b, xs[c], ys[c])
+      if (!area) return null
+      // Barycentric weights: each vertex's share is the sub-triangle opposite it.
+      const wa = orient(b, c, px, py) / area
+      const wb = orient(c, a, px, py) / area
+      return wa * zs[a] + wb * zs[b] + (1 - wa - wb) * zs[c]
+    },
+  }
+}
+
 /**
  * Cut/fill volume of a DEM inside a polygon, relative to a base surface — the
  * stockpile measurement. Each DEM cell whose CENTRE lies inside the polygon
@@ -132,6 +245,9 @@ export function fitBasePlane(points) {
  * base:
  *   'plane'  — least-squares plane through the DEM heights at the polygon vertices
  *              (exact for 3 vertices; the usual stockpile toe surface)
+ *   'toe'    — triangulated toe: a TIN through the DEM heights all along the
+ *              polygon's edge (triangulatedToe), for piles on uneven ground; a cell
+ *              outside the TIN of the edge samples counts as unmeasured
  *   'lowest' — horizontal plane at the lowest vertex height
  *   'custom' — horizontal plane at `height`
  *   'surface' — a second surface, `surface.sample(x, y) → z | null` in the grid's
@@ -175,6 +291,11 @@ export function polygonVolume(
     if (!Number.isFinite(height)) return { error: 'base' }
     baseAt = () => height
     baseInfo = { kind: 'custom', height }
+  } else if (base === 'toe') {
+    const toe = triangulatedToe(grid, points)
+    if (!toe) return { error: 'base' }
+    baseAt = toe.at
+    baseInfo = { kind: 'toe', samples: toe.samples, spacing: toe.spacing }
   } else if (base === 'lowest') {
     if (!known.length) return { error: 'base' }
     let low = Infinity

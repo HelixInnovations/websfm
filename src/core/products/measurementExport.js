@@ -26,6 +26,7 @@
 
 import { planimetricArea, polygon3d, polyline3d, polylineLength } from './measure.js'
 import { volumeUnitLabel } from './rasterUnits.js'
+import { tonnage } from './materials.js'
 import { measureUnitLabel } from './cloudUnits.js'
 import { applySimilarity } from './georef.js'
 
@@ -65,6 +66,9 @@ export const MEASUREMENT_COLUMNS = [
   'volume_net',
   'volume_unit',
   'base',
+  'material',
+  'density_t_m3',
+  'tonnes',
   'coverage_pct',
   'ground_scale_factor',
   'vertices',
@@ -91,7 +95,12 @@ export function rasterRecordCrs(record) {
 }
 
 const round = (v, digits = 6) => (Number.isFinite(v) ? Number(v.toFixed(digits)) : null)
-const VOLUME_BASES = { plane: 'best-fit plane', lowest: 'lowest vertex', custom: 'custom height' }
+const VOLUME_BASES = {
+  plane: 'best-fit plane',
+  toe: 'triangulated toe',
+  lowest: 'lowest vertex',
+  custom: 'custom height',
+}
 
 /**
  * One saved measurement as a flat row of values with units, plus its geometry in
@@ -190,6 +199,13 @@ export function describeMeasurement(record, ctx = {}) {
         const b = v.base ?? {}
         f.base = b.kind === 'surface' ? `reference DEM "${b.name ?? ''}"` : (VOLUME_BASES[b.kind] ?? b.kind ?? null)
         if (b.kind === 'lowest' || b.kind === 'custom') f.base_height = round(b.height)
+        // Tonnage: the cut (material above the base) at the density saved with it.
+        if (record.density > 0 && b.kind !== 'surface') {
+          const t = tonnage(v.cut, record.density, { horizontal: unit, vertical })
+          f.material = record.material ?? null
+          f.density_t_m3 = record.density
+          if (t != null) f.tonnes = round(t)
+        }
       }
     }
     coords = world.map((p) => [p.x, p.y])

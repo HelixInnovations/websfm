@@ -151,6 +151,25 @@ describe('describeMeasurement', () => {
     expect(v.frame.crs).toBe(UTM)
   })
 
+  it('names a triangulated toe and turns the cut into tonnes at the saved density', () => {
+    const pile = {
+      ...volume,
+      unit: 'm',
+      verticalUnit: 'm',
+      groundScale: 1,
+      volume: { ...volume.volume, base: { kind: 'toe', samples: 120, spacing: 0.1 } },
+      material: 'Crushed rock / road base',
+      density: 1.6,
+    }
+    const f = describeMeasurement(pile).fields
+    expect(f).toMatchObject({ base: 'triangulated toe', material: 'Crushed rock / road base', density_t_m3: 1.6 })
+    expect(f.tonnes).toBeCloseTo(16)
+    expect(f.base_height).toBeNull()
+    // Without a material there is no tonnage, never a tonnage of zero.
+    const bare = describeMeasurement({ ...pile, material: undefined, density: undefined }).fields
+    expect(bare.tonnes).toBeNull()
+  })
+
   it('summarises a profile and never places a local frame', () => {
     const p = describeMeasurement(profile, { sourceName: () => 'DEM' })
     expect(p.fields).toMatchObject({

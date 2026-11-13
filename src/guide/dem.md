@@ -136,7 +136,10 @@ nodata gaps and exports as CSV.
 
 ## Measure a volume
 **Volume** measures material inside a polygon against a **Base**:
-- **Best-fit plane through vertices**, for ground that slopes around the feature;
+- **Best-fit plane through vertices**, for ground that slopes evenly around the feature;
+- **Triangulated toe**, a surface through the DEM heights all along the polygon's edge,
+  for a pile on uneven or kinked ground (the foot of a bank, a sloping yard). Draw the
+  polygon on the ground just outside the pile's foot: the edge heights are the base;
 - **Lowest vertex**, a horizontal base at the lowest vertex;
 - **Custom height**, a horizontal base at a height you enter;
 - **Reference DEM**, an imported DEM, which makes the result a
@@ -146,6 +149,9 @@ nodata gaps and exports as CSV.
 - **Background terrain (~30 m)**, the global terrain model, for large changes only.
 
 **Cut** is the volume above the base, **Fill** below it, **Net** their difference.
+Pick a **Material** to see the **Tonnage**: the cut times the material's loose bulk
+density, or a density you type (t/m³, or kg/m³ such as 1600). The density is a typical
+value for stockpiled material; moisture can add 10–20 % for aggregates.
 **DEM coverage** below 100 % means holes or areas off the raster were left out, so the
 volume is too small: fill holes first or redraw.
 

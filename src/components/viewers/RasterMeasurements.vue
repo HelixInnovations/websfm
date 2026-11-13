@@ -30,6 +30,7 @@ import { demRef } from '../../core/products/demWindow.js'
 import { productDescriptor } from '../../core/io/rasterSource.js'
 import { readDemWindow } from '../../workers/computeClient.js'
 import { terrainSurface, TERRAIN_SURFACE_NAME } from '../../core/terrainSurface.js'
+import { materialById, materialGroups, parseDensity, tonnage } from '../../core/products/materials.js'
 
 // Raster measurements over the active ProductViewer. The tool is CHOSEN from the
 // Ribbon's contextual DEM/Orthophoto tab (Measure group) — this component only
@@ -297,10 +298,32 @@ const volume = computed(() => {
   )
 })
 const volumeUnit = computed(() => volumeUnitLabel({ horizontal: unit.value, vertical: verticalUnit.value }))
+// Tonnage: the material above the base (cut) × a loose bulk density, from the
+// Stockpile catalogue or typed in. '' is no material (no tonnage row); 'custom' reads
+// the density field. A saved record keeps the material and density it was saved with.
+const MATERIAL_GROUPS = materialGroups()
+const materialId = ref('')
+const customDensity = ref('')
+const liveDensity = computed(() => {
+  if (materialId.value === 'custom') {
+    const d = parseDensity(customDensity.value)
+    return d ? { name: 'Custom density', density: d.tm3 } : null
+  }
+  const m = materialById(materialId.value)
+  return m ? { name: m.name, density: m.density } : null
+})
+const shownDensity = computed(() => {
+  const r = selected.value
+  if (r?.kind === 'volume') return r.density > 0 ? { name: r.material ?? null, density: r.density } : null
+  return liveDensity.value
+})
+const densityError = computed(
+  () => materialId.value === 'custom' && customDensity.value !== '' && !parseDensity(customDensity.value),
+)
 const VOLUME_ERRORS = {
   'self-intersecting': 'The polygon crosses itself — move or undo a point.',
   'base':
-    'Base undetermined: the plane needs three non-collinear vertices on valid DEM cells, the lowest point needs one, a custom base needs a height.',
+    'Base undetermined: the plane needs three non-collinear vertices on valid DEM cells, the triangulated toe three edge points on the DEM, the lowest point one vertex, a custom base a height.',
   'no-data': 'No valid DEM cells inside the polygon (where a reference DEM is the base: none it covers too).',
   'reference': 'The base surface cannot be sampled here.',
   'polygon': 'Add at least three vertices.',
@@ -389,7 +412,11 @@ const baseResult = computed(() => {
         ? `Reference DEM "${v.base.name}"`
         : v.base.kind === 'plane'
           ? 'Best-fit plane'
-          : `${v.base.kind === 'lowest' ? 'Lowest vertex' : 'Custom'}, ${num(v.base.height)} ${verticalUnit.value}`
+          : v.base.kind === 'toe'
+            ? `Triangulated toe, ${v.base.samples.toLocaleString()} edge heights`
+            : `${v.base.kind === 'lowest' ? 'Lowest vertex' : 'Custom'}, ${num(v.base.height)} ${verticalUnit.value}`
+    const d = diff ? null : shownDensity.value
+    const tonnes = d ? tonnage(v.cut, d.density, { horizontal: unit.value, vertical: verticalUnit.value }) : null
     // Against another epoch, "cut/fill" reads as gain and loss.
     return {
       label: diff ? 'Net change' : 'Net volume',
@@ -397,6 +424,9 @@ const baseResult = computed(() => {
       rows: [
         [diff ? 'Gain (above the reference)' : 'Cut (above base)', fmtVolume(v.cut)],
         [diff ? 'Loss (below the reference)' : 'Fill (below base)', fmtVolume(v.fill)],
+        ...(tonnes != null
+          ? [['Tonnage (cut)', `${num(tonnes, 1)} t at ${d.density} t/m³${d.name ? ` (${d.name})` : ''}`]]
+          : []),
         ['Base', base],
         ['Area', `${num(area.value ?? 0)} ${unit.value}²`],
         ['DEM coverage', `${(v.coverage * 100).toFixed(1)}% of ${v.insideCells.toLocaleString()} cells`],
@@ -415,6 +445,8 @@ const baseResult = computed(() => {
             ? "Both DEMs must use the same vertical datum; a reference's declared offset is applied."
             : '',
         terrain && !selected.value ? (refSampler.value?.note ?? '') : '',
+        d && tonnes == null ? 'Tonnage needs a DEM in metres or feet.' : '',
+        tonnes != null ? 'Tonnage is only as good as the density: moisture adds 10–20 % for aggregates.' : '',
       ]
         .filter(Boolean)
         .join(' '),
@@ -506,6 +538,10 @@ function saveMeasurement() {
     groundScale: gridScale.value,
     profile: tool.value === 'profile' ? profile.value : null,
     volume: tool.value === 'volume' ? volume.value : null,
+    // The density the tonnage used (t/m³), absent when no material was chosen.
+    ...(tool.value === 'volume' && liveDensity.value
+      ? { material: liveDensity.value.name, density: liveDensity.value.density }
+      : {}),
   })
   name.value = selected.value?.name ?? ''
   finished.value = true
@@ -647,6 +683,7 @@ defineExpose({ pick, active: computed(() => tool.value !== 'pan'), state, setToo
             >Base
             <select v-model="baseKind" class="mb-input" aria-label="Volume base surface">
               <option value="plane">Best-fit plane</option>
+              <option value="toe">Triangulated toe</option>
               <option value="lowest">Lowest vertex</option>
               <option value="custom">Custom height</option>
               <option v-for="r in referenceBases" :key="r.id" :value="`ref:${r.id}`">
@@ -663,6 +700,27 @@ defineExpose({ pick, active: computed(() => tool.value !== 'pan'), state, setToo
             class="mb-input mb-num"
             aria-label="Base height"
             :placeholder="verticalUnit"
+          />
+          <label v-if="!isSurfaceBase(baseKind)" class="mb-field"
+            >Material
+            <select v-model="materialId" class="mb-input" aria-label="Material, for tonnage">
+              <option value="">None (no tonnage)</option>
+              <optgroup v-for="g in MATERIAL_GROUPS" :key="g.group" :label="g.group">
+                <option v-for="m in g.items" :key="m.id" :value="m.id">{{ m.name }} · {{ m.density }} t/m³</option>
+              </optgroup>
+              <option value="custom">Custom density…</option>
+            </select>
+          </label>
+          <input
+            v-if="materialId === 'custom' && !isSurfaceBase(baseKind)"
+            v-model="customDensity"
+            type="text"
+            inputmode="decimal"
+            class="mb-input mb-num"
+            :class="{ 'mb-bad': densityError }"
+            aria-label="Bulk density in t/m³ or kg/m³"
+            placeholder="t/m³"
+            :title="densityError ? 'Type 0.1–3.0 t/m³, or 100–3000 kg/m³' : 'Loose bulk density, t/m³ (or kg/m³)'"
           />
           <span class="mb-sep"></span>
         </template>
@@ -875,6 +933,10 @@ defineExpose({ pick, active: computed(() => tool.value !== 'pan'), state, setToo
 }
 .mb-num {
   width: 84px;
+}
+.mb-bad,
+.mb-bad:focus {
+  border-color: var(--danger);
 }
 .mb-btn {
   display: inline-flex;

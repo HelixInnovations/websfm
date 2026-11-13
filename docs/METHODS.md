@@ -1630,9 +1630,21 @@ nothing feeds back into the solve.
   Pix4D/Metashape stockpile tools and QGIS *Raster surface volume*,
   V = Σ (z − base(x,y))·|sx·sy| over cells whose **centre** lies inside the polygon
   (scanline, even-odd), split into cut (> 0) and fill (< 0). The base is a least-squares
-  plane through the DEM at the vertices (refused when collinear), the lowest vertex height,
-  or a user height. Nothing is interpolated: masked, nodata, NaN and off-raster cells are
+  plane through the DEM at the vertices (refused when collinear), a triangulated toe, the
+  lowest vertex height, or a user height. The triangulated toe (`triangulatedToe`, the
+  "triangulated" base of Pix4D and Propeller, sampled densely as the Stockpile app's toe)
+  samples the DEM along the polygon's edge at every vertex and about once per cell between
+  them (at most 4,096 samples), skips samples on holes, and joins them in a Delaunay TIN
+  (Delaunator); each cell centre's base is the barycentric interpolation in the triangle
+  that holds it, found by a visibility walk from the previous cell's triangle (O(1) per
+  cell in scan order). A cell outside the TIN has no base and counts as unmeasured. The
+  base is exact for any ground that is linear between neighbouring edge samples, so it
+  follows a kink or a change of slope along the edge that one plane averages away; like
+  every base built from the edge, it cannot see ground under the pile that the edge does
+  not show. Nothing is interpolated in the DEM: masked, nodata, NaN and off-raster cells are
   counted and reported as a coverage fraction. Units are horizontal² × vertical as recorded.
+  Tonnage (`materials.js`) is cut × a loose bulk density in t/m³, converted from m, ft or
+  US-ft and refused in model units.
 - **Raster clip** (`rasterClip.js`): even-odd scanline fill of pixel centres within each
   polygon (holes subtract), union across polygons.
 - **Image quality** (`core/features/imageQuality.js`): variance of the 3×3 Laplacian of luma

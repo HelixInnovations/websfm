@@ -6,6 +6,7 @@ import {
   polygonVolume,
   fitBasePlane,
   groundVolume,
+  triangulatedToe,
   polyline3d,
   polygon3d,
 } from './measure.js'
@@ -257,6 +258,94 @@ describe('polygonVolume against a second surface', () => {
     // Strict: only the 4 DEM cells over the reference's valid cell.
     expect(strict.validCells).toBe(4)
     expect(strict.cut).toBeCloseTo(4)
+  })
+})
+
+describe('polygonVolume on a triangulated toe', () => {
+  // 10×10 grid of 1-unit cells at survey-sized coordinates. The ground is level up
+  // to x = 5.5 and then climbs 1 per unit (a kink under the pile, as at the foot of a
+  // bank); a 2×2 block 3 high sits on it at cells (4..5, 4..5). Vertices sit on cell
+  // centres, where the bilinear sampler returns the cell's own height, so the edge
+  // samples are the true ground.
+  const ox = 5e5,
+    oy = 7e6
+  const ground = (x) => Math.max(0, x - 5.5)
+  function grid({ ramp = ground, hole = null } = {}) {
+    const data = new Float32Array(100)
+    for (let r = 0; r < 10; r++) for (let c = 0; c < 10; c++) data[r * 10 + c] = ramp(c + 0.5)
+    for (const [c, r] of [
+      [4, 4],
+      [5, 4],
+      [4, 5],
+      [5, 5],
+    ])
+      data[r * 10 + c] += 3
+    const mask = new Uint8Array(100).fill(1)
+    if (hole != null) mask[hole] = 0
+    return { width: 10, height: 10, data, mask, geoTransform: { originX: ox, originY: oy, scaleX: 1, scaleY: -1 } }
+  }
+  const poly = (pts) => pts.map(([x, y]) => ({ x: ox + x, y: oy - y }))
+  const strip = poly([
+    [0.5, 3.5],
+    [8.5, 3.5],
+    [8.5, 6.5],
+    [0.5, 6.5],
+  ])
+
+  it('follows kinked ground that a plane through the vertices cannot', () => {
+    const toe = polygonVolume(grid(), strip, { base: 'toe' })
+    // Exactly the pile: 4 cells × 3.
+    expect(toe.cut).toBeCloseTo(12, 6)
+    expect(toe.fill).toBeCloseTo(0, 6)
+    expect(toe.coverage).toBe(1)
+    expect(toe.base.kind).toBe('toe')
+    expect(toe.base.samples).toBeGreaterThan(4)
+    // The plane through the four vertices runs from 0 to 3 across the strip and
+    // sits above the level ground: it reports fill that is not there.
+    const plane = polygonVolume(grid(), strip, { base: 'plane' })
+    expect(plane.fill).toBeGreaterThan(1)
+  })
+
+  it('reproduces a sloping plane exactly inside a concave polygon', () => {
+    const slope = (x) => 0.25 * x + 2
+    const ell = poly([
+      [0.5, 0.5],
+      [8.5, 0.5],
+      [8.5, 3.5],
+      [6.5, 3.5],
+      [6.5, 8.5],
+      [0.5, 8.5],
+    ])
+    const v = polygonVolume(grid({ ramp: slope }), ell, { base: 'toe' })
+    expect(v.cut).toBeCloseTo(12, 5)
+    expect(v.fill).toBeCloseTo(0, 5)
+  })
+
+  it('interpolates linearly between edge heights and is null outside the edge samples', () => {
+    const slope = (x) => 0.5 * x - 1
+    const toe = triangulatedToe(grid({ ramp: slope }), strip)
+    for (const [x, y] of [
+      [2.3, 4.1],
+      [7.9, 6.2],
+      [4.5, 5],
+    ])
+      expect(toe.at(ox + x, oy - y)).toBeCloseTo(slope(x), 6)
+    expect(toe.at(ox + 9.5, oy - 5)).toBeNull()
+  })
+
+  it('skips edge samples on holes instead of reading them as heights', () => {
+    // Cell (0, 4) is on the west edge of the strip.
+    const v = polygonVolume(grid({ hole: 4 * 10 + 0 }), strip, { base: 'toe' })
+    expect(v.cut).toBeCloseTo(12, 6)
+  })
+
+  it('needs three edge samples with heights', () => {
+    const off = poly([
+      [20, 20],
+      [30, 20],
+      [30, 30],
+    ])
+    expect(polygonVolume(grid(), off, { base: 'toe' }).error).toBe('base')
   })
 })
 

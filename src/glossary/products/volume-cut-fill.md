@@ -20,7 +20,9 @@ area.
 
 The base decides the answer more than anything else. A **plane through the polygon
 vertices** follows sloping ground under a pile, so the vertices belong on the ground
-at the pile's toe, not on the pile. A **horizontal** base (the lowest vertex, or a
+at the pile's toe, not on the pile. A **triangulated toe** goes further: it runs a
+surface through the DEM heights all along the polygon's edge, so it follows ground that
+kinks or changes slope round the pile, which one plane averages away. A **horizontal** base (the lowest vertex, or a
 known design level) suits a pit or a level pad. Another DEM as the base turns the
 measurement into a [DEM of difference](help:dem-of-difference) between two dates.
 
@@ -31,6 +33,6 @@ good as the surface: a photogrammetric DEM of a pile sees its top, never the gro
 under it, which is why the base has to be assumed.
 
 In WebSfM, **Tools ▸ Measure ▸ Volume** draws the polygon on a DEM and offers a
-best-fit plane, the lowest vertex, a custom height or an imported reference DEM as
-the base. The units are the DEM's horizontal unit squared times its vertical unit,
+best-fit plane, a triangulated toe, the lowest vertex, a custom height or an imported
+reference DEM as the base, and a **Material** turns the cut into tonnes. The units are the DEM's horizontal unit squared times its vertical unit,
 and a projected CRS's scale factor is divided out. See [Build DEM](guide:dem).
