@@ -46,6 +46,7 @@ export function formatDxfNumber(v, precision = 6) {
 //     layers?:    [{ name, color? /* ACI 1–255, default 7 */ }]
 //     polylines?: [{ layer, points: [[x,y,z?],…], closed?, elevation? }]
 //     points?:    [{ layer, x, y, z? }]
+//     faces?:     [{ layer, points: [[x,y,z], [x,y,z], [x,y,z]] }]  triangles as 3DFACE
 //   }
 //   opts.precision — decimals for coordinates (default 6)
 // Returns the DXF text (LF line endings). A polyline with < 2 vertices is
@@ -53,6 +54,7 @@ export function formatDxfNumber(v, precision = 6) {
 export function writeDxf(doc = {}, { precision = 6 } = {}) {
   const polylines = doc.polylines ?? []
   const points = doc.points ?? []
+  const faces = doc.faces ?? []
   const out = []
   const g = (code, value) => {
     out.push(String(code).padStart(3), String(value))
@@ -118,6 +120,15 @@ export function writeDxf(doc = {}, { precision = 6 } = {}) {
     const z = p.z ?? 0
     resolvedPoints.push({ layer: addLayer(p.layer), x: p.x, y: p.y, z })
     grow(p.x, p.y, z)
+  }
+  // A triangle is an R12 3DFACE: that entity always has four corners, and a triangle
+  // repeats its third corner as the fourth (the DXF reference's own convention).
+  const resolvedFaces = []
+  for (const f of faces) {
+    const pts = f.points ?? []
+    if (pts.length !== 3) throw new Error(`DXF: a face needs 3 corners, not ${pts.length}`)
+    for (const [x, y, z] of pts) grow(x, y, z ?? 0)
+    resolvedFaces.push({ layer: addLayer(f.layer), pts: pts.map(([x, y, z]) => [x, y, z ?? 0]) })
   }
   if (!(minX <= maxX)) {
     minX = minY = minZ = 0
@@ -194,6 +205,16 @@ export function writeDxf(doc = {}, { precision = 6 } = {}) {
     g(10, num(p.x))
     g(20, num(p.y))
     g(30, num(p.z))
+  }
+  for (const f of resolvedFaces) {
+    g(0, '3DFACE')
+    g(8, f.layer)
+    const [a, b, c] = f.pts
+    for (const [k, [x, y, z]] of [a, b, c, c].entries()) {
+      g(10 + k, num(x))
+      g(20 + k, num(y))
+      g(30 + k, num(z))
+    }
   }
   g(0, 'ENDSEC')
   g(0, 'EOF')
