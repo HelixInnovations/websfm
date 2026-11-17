@@ -59,7 +59,7 @@ export default [
     },
   },
   {
-    files: ['**/*.test.js', 'scripts/**/*.mjs', '*.config.js', 'tests/**/*.js'],
+    files: ['**/*.test.js', 'scripts/**/*.mjs', '*.config.js', 'tests/**/*.js', 'engine/**/*.mjs'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
   },
 ]

@@ -1,0 +1,22 @@
+{
+  "about": "Expectations for engine/regression/aukerman.manifest.json (the Aukerman Park example, 42 photos, CC0). Limits are regression bounds around values measured on WebSfM 0.8.0 (61022796) in headless Chrome 157 on macOS, 8 cores, Apple GPU (WebGPU), 2026-11-17; they are not accuracy claims. positionCheck compares the solved camera centres with the photos' own consumer GPS (EXIF), an independent but metre-level reference.",
+  "registered": "all",
+  "limits": {
+    "detect.keypoints": { "min": 300000, "measured": 379448 },
+    "match.accepted": { "min": 240, "measured": 291 },
+    "reconstruct.pointsGe3": { "min": 10000, "measured": 13025 },
+    "reconstruct.positionCheck.rmsH": { "max": 1.5, "measured": 0.64 },
+    "reconstruct.positionCheck.rmsV": { "max": 1.0, "measured": 0.47 },
+    "depth.depthMaps": { "min": 42, "measured": 42 },
+    "dense.points": { "min": 1200000, "measured": 1517455 },
+    "dem.gsd": { "min": 0.18, "max": 0.3, "measured": 0.2318 },
+    "ortho.gsd": { "min": 0.09, "max": 0.16, "measured": 0.1237 },
+    "ortho.stats.sources": { "min": 42, "measured": 42 }
+  },
+  "outputs": ["dem:geotiff", "ortho:geotiff", "cloud:laz"],
+  "digests": {
+    "detect.kpDigest": "890bc988",
+    "match.pairDigest": "6fb0a29e",
+    "depth.digest": "b2b35c25"
+  }
+}

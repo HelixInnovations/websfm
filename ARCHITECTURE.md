@@ -62,6 +62,12 @@ components/*.vue ──► stores/*.js ──► workers/computeClient.js ──
   The generated bindings in `src/wasm/` are committed, so the front end runs without
   a Rust toolchain.
 
+- **`engine/`**: the engine as a service, for unattended processing on a server. A job
+  manifest and a folder of photos go in; a headless Chrome runs a frozen build of the app's
+  own stores and workers (through the bench's driver) and writes a job record and the
+  exported products. `engine/node/register.mjs` lets plain Node import `src/core/`. See
+  [`engine/README.md`](engine/README.md); it adds no algorithm of its own.
+
 ## The pipeline
 
 1. **Detect**: SIFT in Rust, or a learned detector (ALIKED, DISK, SuperPoint) through ONNX

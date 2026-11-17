@@ -36,10 +36,13 @@
     "check:interop": "node scripts/interop/check.mjs bench-out/interop",
     "check:wasm": "node scripts/wasm-stamp.mjs",
     "licenses:rust": "node scripts/licenses/cargo.mjs",
-    "lint": "eslint src scripts tests *.config.js",
+    "lint": "eslint src scripts tests engine *.config.js",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test:mutation": "stryker run"
+    "test:mutation": "stryker run",
+    "engine:build": "node -e \"import('./engine/runner/build.mjs').then((m) => m.buildEngine({ outDir: process.argv[1] || 'build/engine' }))\"",
+    "engine:job": "node engine/runner/cli.mjs",
+    "engine:regression": "node engine/runner/cli.mjs --manifest engine/regression/aukerman.manifest.json --input public/examples/aukerman --output bench-out/engine/aukerman --no-resume && node --import ./engine/node/register.mjs engine/regression/check.mjs bench-out/engine/aukerman"
   },
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.53.0-build1",

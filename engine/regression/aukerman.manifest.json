@@ -1,0 +1,150 @@
+{
+  "manifestVersion": 1,
+  "job": {
+    "id": "regression-aukerman",
+    "label": "Aukerman Park example (OpenDroneMap, CC0)"
+  },
+  "sceneType": "aerial",
+  "crs": {
+    "horizontal": "EPSG:32617",
+    "vertical": "ellipsoidal"
+  },
+  "images": [
+    {
+      "name": "DSC00268.JPG"
+    },
+    {
+      "name": "DSC00269.JPG"
+    },
+    {
+      "name": "DSC00272.JPG"
+    },
+    {
+      "name": "DSC00273.JPG"
+    },
+    {
+      "name": "DSC00274.JPG"
+    },
+    {
+      "name": "DSC00275.JPG"
+    },
+    {
+      "name": "DSC00276.JPG"
+    },
+    {
+      "name": "DSC00277.JPG"
+    },
+    {
+      "name": "DSC00278.JPG"
+    },
+    {
+      "name": "DSC00279.JPG"
+    },
+    {
+      "name": "DSC00280.JPG"
+    },
+    {
+      "name": "DSC00281.JPG"
+    },
+    {
+      "name": "DSC00282.JPG"
+    },
+    {
+      "name": "DSC00283.JPG"
+    },
+    {
+      "name": "DSC00284.JPG"
+    },
+    {
+      "name": "DSC00285.JPG"
+    },
+    {
+      "name": "DSC00286.JPG"
+    },
+    {
+      "name": "DSC00287.JPG"
+    },
+    {
+      "name": "DSC00288.JPG"
+    },
+    {
+      "name": "DSC00289.JPG"
+    },
+    {
+      "name": "DSC00290.JPG"
+    },
+    {
+      "name": "DSC00291.JPG"
+    },
+    {
+      "name": "DSC00292.JPG"
+    },
+    {
+      "name": "DSC00293.JPG"
+    },
+    {
+      "name": "DSC00294.JPG"
+    },
+    {
+      "name": "DSC00295.JPG"
+    },
+    {
+      "name": "DSC00296.JPG"
+    },
+    {
+      "name": "DSC00297.JPG"
+    },
+    {
+      "name": "DSC00298.JPG"
+    },
+    {
+      "name": "DSC00299.JPG"
+    },
+    {
+      "name": "DSC00300.JPG"
+    },
+    {
+      "name": "DSC00301.JPG"
+    },
+    {
+      "name": "DSC00302.JPG"
+    },
+    {
+      "name": "DSC00303.JPG"
+    },
+    {
+      "name": "DSC00304.JPG"
+    },
+    {
+      "name": "DSC00305.JPG"
+    },
+    {
+      "name": "DSC00306.JPG"
+    },
+    {
+      "name": "DSC00307.JPG"
+    },
+    {
+      "name": "DSC00308.JPG"
+    },
+    {
+      "name": "DSC00309.JPG"
+    },
+    {
+      "name": "DSC00310.JPG"
+    },
+    {
+      "name": "DSC00311.JPG"
+    }
+  ],
+  "stages": {
+    "detect": {},
+    "match": {},
+    "reconstruct": {},
+    "depth": {},
+    "dense": {},
+    "dem": {},
+    "ortho": {}
+  },
+  "outputs": ["report", "dem:geotiff", "ortho:geotiff", "cloud:laz"]
+}
