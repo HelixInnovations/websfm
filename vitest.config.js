@@ -33,6 +33,8 @@ export default defineConfig({
       'src/workers/**/*.test.{js,ts}',
       // The build's third-party notices (scripts/licenses/): plain Node helpers.
       'scripts/licenses/**/*.test.{js,mjs}',
+      // The engine as a service (engine/): the Node loader, the job manifest, the runner.
+      'engine/**/*.test.{js,mjs}',
     ],
   },
 })
